@@ -1,0 +1,179 @@
+{
+	"info": {
+		"_postman_id": "04ca006f-5b2c-4cf3-a7b8-dbd378987c39",
+		"name": "GOLANG_TIMESCALEDB",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "get conditions",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/conditions",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"conditions"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get conditions with location",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/conditions?location=zurich",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"conditions"
+					],
+					"query": [
+						{
+							"key": "location",
+							"value": "zurich"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get conditions with limit",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/conditions?limit=2500",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"conditions"
+					],
+					"query": [
+						{
+							"key": "limit",
+							"value": "2500"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get conditions with dates",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/conditions?start=1590310800&end=1590361200",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"conditions"
+					],
+					"query": [
+						{
+							"key": "start",
+							"value": "1590310800",
+							"description": "2020-05-24T09:00:00"
+						},
+						{
+							"key": "end",
+							"value": "1590361200",
+							"description": "2020-05-24T23:00:00"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get conditions full",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"type": "text",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/conditions?location=milan&start=1590310800&end=1590361200&limit=1500",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"conditions"
+					],
+					"query": [
+						{
+							"key": "location",
+							"value": "milan"
+						},
+						{
+							"key": "start",
+							"value": "1590310800",
+							"description": "2020-05-24T09:00:00"
+						},
+						{
+							"key": "end",
+							"value": "1590361200",
+							"description": "2020-05-24T23:00:00"
+						},
+						{
+							"key": "limit",
+							"value": "1500"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}
