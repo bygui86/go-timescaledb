@@ -1,0 +1,12 @@
+.*
+
+*.env
+*.md
+
+kube
+
+Makefile
+Dockerfile
+reader
+
+go.sum

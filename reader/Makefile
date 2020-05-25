@@ -1,6 +1,7 @@
 
 # VARIABLES
-# -
+NAME = timescaledb-reader
+CONTAINER_NAME = samples/$(NAME)
 
 
 # ENVIRONMENT VARIABLES
@@ -16,14 +17,17 @@ export GO111MODULE = on
 
 ## infra
 
-start-postgres :		## Run PostgreSQL in a container
-	docker run -d --rm --name postgres \
+start-timescaledb :		## Run TimescaleDB in a container
+	docker run -d --rm --name timescaledb \
 		-e POSTGRES_PASSWORD=supersecret \
 		-p 5432:5432 \
-		postgres
+		timescale/timescaledb:latest-pg12
 
-stop-postgres :		## Stop PostgreSQL container
-	docker stop postgres
+stop-timescaledb :		## Stop TimescaleDB container
+	docker stop timescaledb
+
+connect-timescaledb :		## Connect to TimescaleDB container
+	docker exec -it timescaledb bash
 
 ## application
 
@@ -35,6 +39,11 @@ start :		## Run application from source code
 
 start-binary : build		## Run application from binary
 	source local-binary.env && ./reader
+
+## cointaier
+
+container-build :		## Build container image
+	docker build . -t $(CONTAINER_NAME)
 
 ## helpers
 

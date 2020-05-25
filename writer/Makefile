@@ -1,6 +1,7 @@
 
 # VARIABLES
-# -
+NAME = timescaledb-writer
+CONTAINER_NAME = samples/$(NAME)
 
 
 # ENVIRONMENT VARIABLES
@@ -38,6 +39,11 @@ start :		## Run application from source code
 
 start-binary : build		## Run application from binary
 	source local-binary.env && ./writer
+
+## cointaier
+
+container-build :		## Build container image
+	docker build . -t $(CONTAINER_NAME)
 
 ## helpers
 

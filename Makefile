@@ -12,6 +12,14 @@
 
 ## infra
 
+### timescaledb
+
+start-timescaledb :		## Run TimescaleDB in a container
+	cd writer/ && make start-timescaledb
+
+stop-timescaledb :		## Stop TimescaleDB in container
+	cd writer/ && make stop-timescaledb
+
 ### jaeger
 
 start-jaeger :		## Run Jaeger (all-in-one) in a container
@@ -44,14 +52,6 @@ stop-zipkin :		## Stop Zipkin in container
 
 open-zipkin-ui :		## Open Zipkin UI in browser
 	open http://localhost:9411
-
-### postgres
-
-start-timescaledb :		## Run TimescaleDB in a container
-	cd writer/ && make start-timescaledb
-
-stop-timescaledb :		## Stop TimescaleDB in container
-	cd writer/ && make stop-timescaledb
 
 ## applications
 
