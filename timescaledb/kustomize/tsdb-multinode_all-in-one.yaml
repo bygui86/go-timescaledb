@@ -1,0 +1,892 @@
+---
+# Source: timescaledb-multinode/templates/serviceaccount-timescaledb.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: timescaledb
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+---
+# Source: timescaledb-multinode/templates/sec-timescaledb.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: timescaledb-access
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+type: Opaque
+data:
+  password-superuser: dGVh
+...
+---
+# Source: timescaledb-multinode/templates/sec-timescaledb.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: timescaledb-data
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+type: Opaque
+data:
+  password-superuser: Y29mZmVl
+...
+---
+# Source: timescaledb-multinode/templates/svc-timescaledb-access.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "4000"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: postgresql
+    port: 5432
+    protocol: TCP
+  selector:
+    app: timescaledb
+    timescaleNodeType: access
+...
+---
+# Source: timescaledb-multinode/templates/svc-timescaledb-data.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb-data
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+spec:
+  clusterIP: None
+  ports:
+  - name: postgresql
+    port: 5432
+    protocol: TCP
+  selector:
+    app: timescaledb
+    timescaleNodeType: data
+...
+---
+# Source: timescaledb-multinode/templates/statefulset-timescaledb-accessnode.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb-access
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+spec:
+  serviceName: timescaledb-access
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescaledb
+      release: RELEASE-NAME
+      timescaleNodeType: access
+  template:
+    metadata:
+      name: timescaledb-access
+      labels:
+        app: timescaledb
+        release: RELEASE-NAME
+        timescaleNodeType: access
+    spec:
+      serviceAccountName: timescaledb
+      securityContext:
+        # The postgres user inside the TimescaleDB image has uid=1000.
+        # This configuration ensures the permissions of the mounts are suitable
+        fsGroup: 1000
+      initContainers:
+      - name: initdb
+        image: "timescaledev/timescaledb:latest-pg11"
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: POSTGRESQL_CUSTOM_PARAMETERS
+          value: |
+            log_checkpoints = 'on'
+            log_connections = 'on'
+            log_line_prefix = '%t [%p]: [%c-%l] %u@%d,app=%a [%e] '
+            log_lock_waits = 'on'
+            log_min_duration_statement = '1s'
+            log_statement = 'ddl'
+            max_connections = '100'
+            max_prepared_transactions = '150'
+            max_wal_size = '512MB'
+            min_wal_size = '256MB'
+            shared_buffers = '300MB'
+            temp_file_limit = '1GB'
+            timescaledb.passfile = '../.pgpass'
+            work_mem = '16MB'
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+        - name: POSTGRES_PASSWORD_DATA_NODE
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-data
+              key: password-superuser
+        - name: LC_ALL
+          value: C.UTF-8
+        - name: LANG
+          value: C.UTF-8
+        - name: PGDATA
+          value: /var/lib/postgresql/pgdata
+        command:
+          - sh
+          - '-c'
+          # By calling the original entrypoint with the first argument being postgres
+          # we ensure we do everything that is required to init a PostgreSQL instance.
+          # By supplying --version however, we ensure the instance isn't started, but merely
+          # a version number is displayed, allowing us to do some more initialization
+          - |
+            set -e
+            install -o postgres -g postgres -m 0700 -d "${PGDATA}"
+            /docker-entrypoint.sh postgres --version
+            grep -qxF "include 'postgresql_helm_customizations.conf'" "${PGDATA}/postgresql.conf" \
+                || echo "include 'postgresql_helm_customizations.conf'" >> "${PGDATA}/postgresql.conf"
+            echo "Writing custom PostgreSQL Parameters to ${PGDATA}/postgresql_helm_customizations.conf"
+            echo "cluster_name = '$(hostname)'" > "${PGDATA}/postgresql_helm_customizations.conf"
+            echo "${POSTGRESQL_CUSTOM_PARAMETERS}" | sort >> "${PGDATA}/postgresql_helm_customizations.conf"
+            echo "*:*:*:postgres:${POSTGRES_PASSWORD_DATA_NODE}" > "${PGDATA}/../.pgpass"
+            chown postgres:postgres "${PGDATA}/../.pgpass" "${PGDATA}/postgresql_helm_customizations.conf"
+            chmod 0600 "${PGDATA}/../.pgpass"
+        volumeMounts:
+        - name: storage-volume
+          mountPath: "/var/lib/postgresql"
+          subPath: ""
+      containers:
+      - name: timescaledb
+        image: "timescaledev/timescaledb:latest-pg11"
+        imagePullPolicy: IfNotPresent
+        # We start postgres with a fully cleared environment
+        command:
+          - sh
+          - '-c'
+          - exec env -i PGDATA="${PGDATA}" PATH="${PATH}" /docker-entrypoint.sh postgres
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: LC_ALL
+          value: C.UTF-8
+        - name: LANG
+          value: C.UTF-8
+        - name: PGDATA
+          value: /var/lib/postgresql/pgdata
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: storage-volume
+          mountPath: "/var/lib/postgresql"
+          subPath: ""
+        resources:
+          limits:
+            cpu: 1500m
+            memory: 3Gi
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchLabels:
+                  app:  timescaledb
+                  release: "RELEASE-NAME"
+        
+  volumeClaimTemplates:
+    - metadata:
+        name: storage-volume
+        annotations:
+        labels:
+          app: timescaledb
+          release: RELEASE-NAME
+          heritage: Helm
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: "5G"
+---
+# Source: timescaledb-multinode/templates/statefulset-timescaledb-datanode.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb-data
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+spec:
+  serviceName: timescaledb-data
+  replicas: 3
+  selector:
+    matchLabels:
+      app: timescaledb
+      release: RELEASE-NAME
+      timescaleNodeType: data
+  template:
+    metadata:
+      name: timescaledb-data
+      labels:
+        app: timescaledb
+        release: RELEASE-NAME
+        timescaleNodeType: data
+    spec:
+      serviceAccountName: timescaledb
+      securityContext:
+        # The postgres user inside the TimescaleDB image has uid=1000.
+        # This configuration ensures the permissions of the mounts are suitable
+        fsGroup: 1000
+      initContainers:
+      - name: initdb
+        image: "timescaledev/timescaledb:latest-pg11"
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: POSTGRESQL_CUSTOM_PARAMETERS
+          value: |
+            log_checkpoints = 'on'
+            log_connections = 'on'
+            log_line_prefix = '%t [%p]: [%c-%l] %u@%d,app=%a [%e] '
+            log_lock_waits = 'on'
+            log_min_duration_statement = '1s'
+            log_statement = 'ddl'
+            max_connections = '100'
+            max_prepared_transactions = '150'
+            max_wal_size = '512MB'
+            min_wal_size = '256MB'
+            shared_buffers = '300MB'
+            temp_file_limit = '1GB'
+            timescaledb.passfile = '../.pgpass'
+            work_mem = '16MB'
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-data
+              key: password-superuser
+        - name: LC_ALL
+          value: C.UTF-8
+        - name: LANG
+          value: C.UTF-8
+        - name: PGDATA
+          value: /var/lib/postgresql/pgdata
+        command:
+          - sh
+          - '-c'
+          # By calling the original entrypoint with the first argument being postgres
+          # we ensure we do everything that is required to init a PostgreSQL instance.
+          # By supplying --version however, we ensure the instance isn't started, but merely
+          # a version number is displayed, allowing us to do some more initialization
+          - |
+            set -e
+            install -o postgres -g postgres -m 0700 -d "${PGDATA}" "${PGDATA}/../conf.d"
+            /docker-entrypoint.sh postgres --version
+            grep -qxF "include 'postgresql_helm_customizations.conf'" "${PGDATA}/postgresql.conf" \
+                || echo "include 'postgresql_helm_customizations.conf'" >> "${PGDATA}/postgresql.conf"
+            echo "Writing custom PostgreSQL Parameters to ${PGDATA}/postgresql_helm_customizations.conf"
+            echo "cluster_name = '$(hostname)'" > "${PGDATA}/postgresql_helm_customizations.conf"
+            echo "${POSTGRESQL_CUSTOM_PARAMETERS}" | sort >> "${PGDATA}/postgresql_helm_customizations.conf"
+            # The TimescaleDB extension should not be available by default, as this interferes with the bootstrapping
+            # done by the access nodes. Therefore we drop the extensions from template1
+            echo "DROP EXTENSION timescaledb" | /docker-entrypoint.sh postgres --single -D "${PGDATA}" template1
+        volumeMounts:
+        - name: storage-volume
+          mountPath: "/var/lib/postgresql"
+          subPath: ""
+      containers:
+      - name: timescaledb
+        image: "timescaledev/timescaledb:latest-pg11"
+        imagePullPolicy: IfNotPresent
+        # We start postgres with a fully cleared environment
+        command:
+          - sh
+          - '-c'
+          - exec env -i PGDATA="${PGDATA}" PATH="${PATH}" /docker-entrypoint.sh postgres
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        - name: LC_ALL
+          value: C.UTF-8
+        - name: LANG
+          value: C.UTF-8
+        - name: PGDATA
+          value: /var/lib/postgresql/pgdata
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: storage-volume
+          mountPath: "/var/lib/postgresql"
+          subPath: ""
+        resources:
+          limits:
+            cpu: 1500m
+            memory: 3Gi
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchLabels:
+                  app:  timescaledb
+                  release: "RELEASE-NAME"
+        
+  volumeClaimTemplates:
+    - metadata:
+        name: storage-volume
+        annotations:
+        labels:
+          app: timescaledb
+          release: RELEASE-NAME
+          heritage: Helm
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: "5G"
+---
+# Source: timescaledb-multinode/templates/job-attach-datanode.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db0-data0
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+        dataNode: timescaledb-data-0
+    spec:
+      containers:
+      - name: attachdn-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-0.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-0
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-attach-datanode.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db1-data0
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+        dataNode: timescaledb-data-0
+    spec:
+      containers:
+      - name: attachdn-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-0.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-0
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-attach-datanode.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db0-data1
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+        dataNode: timescaledb-data-1
+    spec:
+      containers:
+      - name: attachdn-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-1.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-1
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-attach-datanode.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db1-data1
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+        dataNode: timescaledb-data-1
+    spec:
+      containers:
+      - name: attachdn-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-1.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-1
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-attach-datanode.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db0-data2
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+        dataNode: timescaledb-data-2
+    spec:
+      containers:
+      - name: attachdn-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-2.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-2
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-attach-datanode.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db1-data2
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+        dataNode: timescaledb-data-2
+    spec:
+      containers:
+      - name: attachdn-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-2.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-2
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-create-databases.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: createdb-db0
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+    spec:
+      containers:
+      - name: createdb-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          - >
+              while ! pg_isready -U postgres -h timescaledb; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql --file=- --echo-queries -d "${ACCESS_SVC_CONNSTR}" \
+                --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: SQLCOMMAND
+          value: |
+            SELECT format('CREATE DATABASE %I', :'dbname')
+            WHERE NOT EXISTS (
+               SELECT
+                 FROM pg_database
+                WHERE datname=:'dbname'
+            )
+            \gexec
+            \c :"dbname"
+            CREATE EXTENSION IF NOT EXISTS timescaledb;
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-create-databases.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: createdb-db1
+  labels:
+    app: timescaledb
+    chart: timescaledb-multinode-0.3.0
+    release: RELEASE-NAME
+    heritage: Helm
+  annotations:
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        chart: timescaledb-multinode-0.3.0
+        release: RELEASE-NAME
+        heritage: Helm
+    spec:
+      containers:
+      - name: createdb-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          - >
+              while ! pg_isready -U postgres -h timescaledb; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql --file=- --echo-queries -d "${ACCESS_SVC_CONNSTR}" \
+                --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: SQLCOMMAND
+          value: |
+            SELECT format('CREATE DATABASE %I', :'dbname')
+            WHERE NOT EXISTS (
+               SELECT
+                 FROM pg_database
+                WHERE datname=:'dbname'
+            )
+            \gexec
+            \c :"dbname"
+            CREATE EXTENSION IF NOT EXISTS timescaledb;
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+...
+---
+# Source: timescaledb-multinode/templates/job-attach-datanode.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+---
+# Source: timescaledb-multinode/templates/job-create-databases.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+---
+# Source: timescaledb-multinode/templates/sec-timescaledb.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+---
+# Source: timescaledb-multinode/templates/svc-timescaledb-access.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+---
+# Source: timescaledb-multinode/templates/svc-timescaledb-data.yaml
+# This file and its contents are licensed under the Apache License 2.0.
+# Please see the included NOTICE for copyright information and LICENSE for a copy of the license.

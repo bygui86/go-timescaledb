@@ -1,0 +1,401 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db0-data0
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        dataNode: timescaledb-data-0
+    spec:
+      containers:
+      - name: attachdn-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-0.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-0
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db1-data0
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        dataNode: timescaledb-data-0
+    spec:
+      containers:
+      - name: attachdn-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-0.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-0
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db0-data1
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        dataNode: timescaledb-data-1
+    spec:
+      containers:
+      - name: attachdn-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-1.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-1
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db1-data1
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        dataNode: timescaledb-data-1
+    spec:
+      containers:
+      - name: attachdn-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-1.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-1
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db0-data2
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        dataNode: timescaledb-data-2
+    spec:
+      containers:
+      - name: attachdn-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-2.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-2
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: attachdn-db1-data2
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+        dataNode: timescaledb-data-2
+    spec:
+      containers:
+      - name: attachdn-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          # We wait for the data node to allow connections
+          # We wait for the access node to allow connections to DBNAME
+          - >
+              while ! pg_isready -U postgres -h "${DATA_NODE_DNS}"; do sleep 1; done;
+              while ! psql -d "${ACCESS_SVC_CONNSTR}" --set dbname="${DBNAME}" --set ON_ERROR_STOP=1 --command '\c :"dbname"'; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql -d "${ACCESS_SVC_CONNSTR}" --file=- --echo-queries --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}" \
+                --set data_node_name="${DATA_NODE_NAME}" \
+                --set data_node_dns="${DATA_NODE_DNS}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: DATA_NODE_DNS
+          value: timescaledb-data-2.timescaledb-data
+        - name: DATA_NODE_NAME
+          value: timescaledb-data-2
+        - name: SQLCOMMAND
+          value: |
+            \c :"dbname"
+            SELECT *
+              FROM add_data_node(:'data_node_name'::name, host => :'data_node_dns', if_not_exists => true)
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: createdb-db0
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+    spec:
+      containers:
+      - name: createdb-0
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          - >
+              while ! pg_isready -U postgres -h timescaledb; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql --file=- --echo-queries -d "${ACCESS_SVC_CONNSTR}" \
+                --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}"
+        env:
+        - name: DBNAME
+          value: "postgres"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: SQLCOMMAND
+          value: |
+            SELECT format('CREATE DATABASE %I', :'dbname')
+            WHERE NOT EXISTS (
+               SELECT
+                 FROM pg_database
+                WHERE datname=:'dbname'
+            )
+            \gexec
+            \c :"dbname"
+            CREATE EXTENSION IF NOT EXISTS timescaledb;
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: createdb-db1
+  labels:
+    app: timescaledb
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app: timescaledb
+    spec:
+      containers:
+      - name: createdb-1
+        image: postgres:11-alpine # A relatively small official image that can run psql
+        command:
+          - sh
+          - -c
+          - >
+              while ! pg_isready -U postgres -h timescaledb; do sleep 1; done;
+              echo "${SQLCOMMAND}" | psql --file=- --echo-queries -d "${ACCESS_SVC_CONNSTR}" \
+                --set ON_ERROR_STOP=1 \
+                --set dbname="${DBNAME}"
+        env:
+        - name: DBNAME
+          value: "example"
+        - name: ACCESS_SVC_CONNSTR
+          value: host=timescaledb user=postgres connect_timeout=3 sslmode=disable
+        - name: SQLCOMMAND
+          value: |
+            SELECT format('CREATE DATABASE %I', :'dbname')
+            WHERE NOT EXISTS (
+               SELECT
+                 FROM pg_database
+                WHERE datname=:'dbname'
+            )
+            \gexec
+            \c :"dbname"
+            CREATE EXTENSION IF NOT EXISTS timescaledb;
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: timescaledb-access
+              key: password-superuser
+      restartPolicy: OnFailure
+  backoffLimit: 2

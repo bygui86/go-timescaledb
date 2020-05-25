@@ -1,0 +1,10 @@
+
+resources:
+  - statefulset.yaml
+  - rbac.yaml
+  - secret.yaml
+  - service.yaml
+
+commonLabels:
+  app: timescaledb
+  group: db

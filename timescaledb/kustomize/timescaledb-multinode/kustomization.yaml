@@ -1,0 +1,8 @@
+
+resources:
+  - job.yaml
+  - rbac.yaml
+  - secret.yaml
+  - service.yaml
+  - statefulset-access.yaml
+  - statefulset-data.yaml

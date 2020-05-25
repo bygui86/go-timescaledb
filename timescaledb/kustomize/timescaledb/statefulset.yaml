@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb
+spec:
+  serviceName: timescaledb
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: timescaledb
+  template:
+    metadata:
+      name: timescaledb
+      labels:
+        app: timescaledb
+    spec:
+      serviceAccountName: timescaledb
+      containers:
+        - name: timescaledb
+          image: timescale/timescaledb:latest-pg12
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: timescaledb
+          # env:
+          #   - name: POD_NAMESPACE
+          #     valueFrom:
+          #       fieldRef:
+          #         apiVersion: v1
+          #         fieldPath: metadata.namespace
+          #   - name: LC_ALL
+          #     value: C.UTF-8
+          #   - name: LANG
+          #     value: C.UTF-8
+          #   - name: PGDATA
+          #     value: /var/lib/postgresql/pgdata
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 6G
+            limits:
+              cpu: 4000m
+              memory: 8G
+          # from tsdb-single_all-in-one.yaml
+          # lifecycle:
+          #   preStop:
+          #     exec:
+          #       command:
+          #       - psql
+          #       - -X
+          #       - --file
+          #       - "/etc/timescaledb/scripts/lifecycle_preStop.psql"
+          # from tsdb-single_all-in-one.yaml
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - /var/run/postgresql
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - /var/run/postgresql
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 6
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/postgresql
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5G
