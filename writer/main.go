@@ -12,13 +12,14 @@ import (
 
 	"github.com/bygui86/go-timescaledb/writer/config"
 	"github.com/bygui86/go-timescaledb/writer/data_writer"
+	"github.com/bygui86/go-timescaledb/writer/kubernetes"
 	"github.com/bygui86/go-timescaledb/writer/logging"
 	"github.com/bygui86/go-timescaledb/writer/monitoring"
 	"github.com/bygui86/go-timescaledb/writer/tracing"
 )
 
 const (
-	serviceName = "writer"
+	serviceName = "timescaledb-writer"
 
 	zipkinHost = "localhost"
 	zipkinPort = 9411
@@ -28,6 +29,7 @@ var (
 	monitoringServer *monitoring.Server
 	jaegerCloser     io.Closer
 	zipkinReporter   reporter.Reporter
+	kubeProbeServer  *kubernetes.Server
 	ctxCancel        context.CancelFunc
 	writer           *data_writer.Writer
 )
@@ -56,6 +58,10 @@ func main() {
 	ctx, ctxCancel = context.WithCancel(context.Background())
 
 	writer = startWriter(ctx, cfg.GetEnableTracing())
+
+	if cfg.GetEnableKubeProbes() {
+		kubeProbeServer = startKubeProbeServer()
+	}
 
 	logging.SugaredLog.Infof("%s up and running", serviceName)
 
@@ -130,6 +136,25 @@ func startWriter(ctx context.Context, enableTracing bool) *data_writer.Writer {
 	return writer
 }
 
+func startKubeProbeServer() *kubernetes.Server {
+	logging.Log.Debug("Start Kubernetes probe-server")
+	server, newErr := kubernetes.New()
+	if newErr != nil {
+		logging.SugaredLog.Errorf("Kubernetes probe-server creation failed: %s", newErr.Error())
+		os.Exit(501)
+	}
+	logging.Log.Debug("Kubernetes probe-server successfully created")
+
+	startErr := server.Start()
+	if startErr != nil {
+		logging.SugaredLog.Errorf("Kubernetes probe-server start failed: %s", startErr.Error())
+		os.Exit(502)
+	}
+	logging.Log.Debug("Kubernetes probe-server successfully started")
+
+	return server
+}
+
 func startSysCallChannel() {
 	syscallCh := make(chan os.Signal)
 	signal.Notify(syscallCh, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
@@ -145,6 +170,10 @@ func shutdownAndWait(timeout int) {
 
 	if ctxCancel != nil {
 		ctxCancel()
+	}
+
+	if kubeProbeServer != nil {
+		kubeProbeServer.Shutdown(timeout)
 	}
 
 	if jaegerCloser != nil {

@@ -6,13 +6,15 @@ import (
 )
 
 const (
-	enableMonitoringEnvVar = "ENABLE_MONITORING" // bool
-	enableTracingEnvVar    = "ENABLE_TRACING"    // bool
-	tracingTechEnvVar      = "TRACING_TECH"      //  available values: jaeger, zipkin
+	enableMonitoringEnvVar = "ENABLE_MONITORING"  // bool
+	enableTracingEnvVar    = "ENABLE_TRACING"     // bool
+	tracingTechEnvVar      = "TRACING_TECH"       //  available values: jaeger, zipkin
+	enableKubeProbesEnvVar = "ENABLE_KUBE_PROBES" // bool
 
 	enableMonitoringDefault = true
 	enableTracingDefault    = true
 	tracingTechDefault      = TracingTechJaeger
+	enableKubeProbesDefault = true
 )
 
 func LoadConfig() *Config {
@@ -29,5 +31,6 @@ func LoadConfig() *Config {
 		enableMonitoring: utils.GetBoolEnv(enableMonitoringEnvVar, enableMonitoringDefault),
 		enableTracing:    utils.GetBoolEnv(enableTracingEnvVar, enableTracingDefault),
 		tracingTech:      tracingTech,
+		enableKubeProbes: utils.GetBoolEnv(enableKubeProbesEnvVar, enableKubeProbesDefault),
 	}
 }

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: timescaledb-reader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescaledb-reader
+  template:
+    metadata:
+      labels:
+        app: timescaledb-reader
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: timescaledb-reader
+          image: "bygui86/timescaledb-reader:latest"
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: timescaledb-reader
+            - secretRef:
+                name: timescaledb-reader
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9090
+            - name: probes
+              containerPort: 9091
+          resources:
+            requests:
+              cpu: 500m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 9091
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9091
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3

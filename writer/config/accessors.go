@@ -11,3 +11,7 @@ func (c Config) GetEnableTracing() bool {
 func (c Config) GetTracingTech() string {
 	return c.tracingTech
 }
+
+func (c Config) GetEnableKubeProbes() bool {
+	return c.enableKubeProbes
+}

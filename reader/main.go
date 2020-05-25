@@ -10,6 +10,7 @@ import (
 	"github.com/openzipkin/zipkin-go/reporter"
 
 	"github.com/bygui86/go-timescaledb/reader/config"
+	"github.com/bygui86/go-timescaledb/reader/kubernetes"
 	"github.com/bygui86/go-timescaledb/reader/logging"
 	"github.com/bygui86/go-timescaledb/reader/monitoring"
 	"github.com/bygui86/go-timescaledb/reader/rest"
@@ -17,7 +18,7 @@ import (
 )
 
 const (
-	serviceName = "http-server"
+	serviceName = "timescaledb-reader"
 
 	zipkinHost = "localhost"
 	zipkinPort = 9411
@@ -27,6 +28,7 @@ var (
 	monitoringServer *monitoring.Server
 	jaegerCloser     io.Closer
 	zipkinReporter   reporter.Reporter
+	kubeProbeServer  *kubernetes.Server
 	restServer       *rest.Server
 )
 
@@ -51,6 +53,10 @@ func main() {
 	}
 
 	restServer = startRestServer()
+
+	if cfg.GetEnableKubeProbes() {
+		kubeProbeServer = startKubeProbeServer()
+	}
 
 	logging.SugaredLog.Infof("%s up and running", serviceName)
 
@@ -125,6 +131,25 @@ func startRestServer() *rest.Server {
 	return server
 }
 
+func startKubeProbeServer() *kubernetes.Server {
+	logging.Log.Debug("Start Kubernetes probe-server")
+	server, newErr := kubernetes.New()
+	if newErr != nil {
+		logging.SugaredLog.Errorf("Kubernetes probe-server creation failed: %s", newErr.Error())
+		os.Exit(501)
+	}
+	logging.Log.Debug("Kubernetes probe-server successfully created")
+
+	startErr := server.Start()
+	if startErr != nil {
+		logging.SugaredLog.Errorf("Kubernetes probe-server start failed: %s", startErr.Error())
+		os.Exit(502)
+	}
+	logging.Log.Debug("Kubernetes probe-server successfully started")
+
+	return server
+}
+
 func startSysCallChannel() {
 	syscallCh := make(chan os.Signal)
 	signal.Notify(syscallCh, syscall.SIGTERM, syscall.SIGINT, os.Interrupt)
@@ -136,6 +161,10 @@ func shutdownAndWait(timeout int) {
 
 	if restServer != nil {
 		restServer.Shutdown(timeout)
+	}
+
+	if kubeProbeServer != nil {
+		kubeProbeServer.Shutdown(timeout)
 	}
 
 	if jaegerCloser != nil {

@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: timescaledb-reader
+spec:
+  selector:
+    matchLabels:
+      app: timescaledb-reader
+#  namespaceSelector:
+#    matchNames:
+#      - default
+  endpoints:
+    - port: metrics
+      interval: 15s
+      scrapeTimeout: 14s

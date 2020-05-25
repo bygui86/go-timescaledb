@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: timescaledb-writer
+data:
+  # tracing
+  ENABLE_TRACING: "false"
+  # database
+  DB_HOST: timescaledb.default.svc.cluster.local
+  DB_NAME: postgres

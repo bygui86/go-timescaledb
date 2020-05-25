@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: timescaledb-writer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: timescaledb-writer
+  template:
+    metadata:
+      labels:
+        app: timescaledb-writer
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: timescaledb-writer
+          image: "bygui86/timescaledb-writer:latest"
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: timescaledb-writer
+            - secretRef:
+                name: timescaledb-writer
+          ports:
+            - name: metrics
+              containerPort: 9090
+            - name: probes
+              containerPort: 9091
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 9091
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9091
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3

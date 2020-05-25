@@ -1,7 +1,7 @@
 
 # VARIABLES
 NAME = timescaledb-reader
-CONTAINER_NAME = samples/$(NAME)
+CONTAINER_NAME = bygui86/$(NAME)
 
 
 # ENVIRONMENT VARIABLES
@@ -44,6 +44,17 @@ start-binary : build		## Run application from binary
 
 container-build :		## Build container image
 	docker build . -t $(CONTAINER_NAME)
+
+container-push :		## Build container image
+	docker push $(CONTAINER_NAME)
+
+## kubernetes
+
+deploy :		## Deploy reader on Kubernetes
+	kubectl apply -k kube-manifests
+
+delete :		## Delete reader from Kubernetes
+	kubectl delete -k kube-manifests
 
 ## helpers
 
