@@ -9,7 +9,7 @@ const (
 	monitorHostEnvVar = "MONITOR_HOST"
 	monitorPortEnvVar = "MONITOR_PORT"
 
-	monitorHostDefault = "localhost"
+	monitorHostDefault = ""
 	monitorPortDefault = 9090
 )
 

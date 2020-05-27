@@ -15,3 +15,7 @@ func (c Config) GetTracingTech() string {
 func (c Config) GetEnableKubeProbes() bool {
 	return c.enableKubeProbes
 }
+
+func (c Config) GetShutdownTimeout() int {
+	return c.shutdownTimeout
+}

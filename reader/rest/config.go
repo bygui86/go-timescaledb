@@ -9,7 +9,7 @@ const (
 	restHostEnvVar = "REST_HOST"
 	restPortEnvVar = "REST_PORT"
 
-	restHostEnvVarDefault = "localhost"
+	restHostEnvVarDefault = ""
 	restPortEnvVarDefault = 8080
 )
 

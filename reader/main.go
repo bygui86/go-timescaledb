@@ -19,9 +19,6 @@ import (
 
 const (
 	serviceName = "timescaledb-reader"
-
-	zipkinHost = "localhost"
-	zipkinPort = 9411
 )
 
 var (
@@ -52,7 +49,7 @@ func main() {
 		}
 	}
 
-	restServer = startRestServer()
+	restServer = startRestServer(cfg.GetEnableTracing())
 
 	if cfg.GetEnableKubeProbes() {
 		kubeProbeServer = startKubeProbeServer()
@@ -62,7 +59,7 @@ func main() {
 
 	startSysCallChannel()
 
-	shutdownAndWait(1)
+	shutdownAndWait(cfg.GetShutdownTimeout())
 }
 
 func initLogging() {
@@ -101,7 +98,8 @@ func initJaegerTracer() io.Closer {
 
 func initZipkinTracer() reporter.Reporter {
 	logging.Log.Debug("Init Zipkin tracer")
-	zReporter, err := tracing.InitTestingZipkin(serviceName, zipkinHost, zipkinPort)
+	tracing.LoadZipkinConfig()
+	zReporter, err := tracing.InitTestingZipkin(serviceName)
 	if err != nil {
 		logging.SugaredLog.Errorf("Zipkin tracer setup failed: %s", err.Error())
 		os.Exit(501)
@@ -109,10 +107,10 @@ func initZipkinTracer() reporter.Reporter {
 	return zReporter
 }
 
-func startRestServer() *rest.Server {
+func startRestServer(enableTracing bool) *rest.Server {
 	logging.Log.Debug("Start REST server")
 
-	server, newErr := rest.New(true)
+	server, newErr := rest.New(enableTracing)
 	if newErr != nil {
 		logging.SugaredLog.Errorf("REST server creation failed: %s", newErr.Error())
 		os.Exit(501)

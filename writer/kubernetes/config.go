@@ -11,7 +11,7 @@ const (
 	restHostEnvVar = "KUBE_HOST"
 	restPortEnvVar = "KUBE_PORT"
 
-	restHostDefault = "localhost"
+	restHostDefault = ""
 	restPortDefault = 9091
 )
 

@@ -10,14 +10,31 @@ import (
 	zipkinhttpreporter "github.com/openzipkin/zipkin-go/reporter/http"
 
 	"github.com/bygui86/go-timescaledb/writer/logging"
+	"github.com/bygui86/go-timescaledb/writer/utils"
 )
 
 const (
+	zipkinHostEnvVar = "ZIPKIN_HOST"
+	zipkinPortEnvVar = "ZIPKIN_PORT"
+
+	zipkinHostDefault = "localhost"
+	zipkinPortDefault = 9411
+
 	zipkinUrlFormat       = "http://%s:%d/api/v2/spans"
 	zipkinDefaultHostPort = ":0"
 )
 
-func InitSampleZipkin(serviceName, zipkinHost string, zipkinPort int) (reporter.Reporter, error) {
+var (
+	zipkinHost string
+	zipkinPort int
+)
+
+func LoadZipkinConfig() {
+	zipkinHost = utils.GetStringEnv(zipkinHostEnvVar, zipkinHostDefault)
+	zipkinPort = utils.GetIntEnv(zipkinPortEnvVar, zipkinPortDefault)
+}
+
+func InitSampleZipkin(serviceName string) (reporter.Reporter, error) {
 	// set up a span reporter
 	reporter := zipkinhttpreporter.NewReporter(fmt.Sprintf(zipkinUrlFormat, zipkinHost, zipkinPort))
 
@@ -44,7 +61,7 @@ func InitSampleZipkin(serviceName, zipkinHost string, zipkinPort int) (reporter.
 	return reporter, nil
 }
 
-func InitTestingZipkin(serviceName, zipkinHost string, zipkinPort int) (reporter.Reporter, error) {
+func InitTestingZipkin(serviceName string) (reporter.Reporter, error) {
 	// set up a span reporter
 	reporter := zipkinhttpreporter.NewReporter(fmt.Sprintf(zipkinUrlFormat, zipkinHost, zipkinPort))
 
@@ -78,7 +95,7 @@ func InitTestingZipkin(serviceName, zipkinHost string, zipkinPort int) (reporter
 	return reporter, nil
 }
 
-func InitProductionZipkin(serviceName, zipkinHost string, zipkinPort int) (reporter.Reporter, error) {
+func InitProductionZipkin(serviceName string) (reporter.Reporter, error) {
 	// set up a span reporter
 	reporter := zipkinhttpreporter.NewReporter(fmt.Sprintf(zipkinUrlFormat, zipkinHost, zipkinPort))
 

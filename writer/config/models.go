@@ -5,4 +5,5 @@ type Config struct {
 	enableTracing    bool
 	tracingTech      string
 	enableKubeProbes bool
+	shutdownTimeout  int
 }

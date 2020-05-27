@@ -10,11 +10,13 @@ const (
 	enableTracingEnvVar    = "ENABLE_TRACING"     // bool
 	tracingTechEnvVar      = "TRACING_TECH"       //  available values: jaeger, zipkin
 	enableKubeProbesEnvVar = "ENABLE_KUBE_PROBES" // bool
+	shutdownTimeoutEnvVar  = "SHUTDOWN_TIMEOUT"
 
 	enableMonitoringDefault = true
 	enableTracingDefault    = true
 	tracingTechDefault      = TracingTechJaeger
 	enableKubeProbesDefault = true
+	shutdownTimeoutDefault  = 1
 )
 
 func LoadConfig() *Config {
@@ -32,5 +34,6 @@ func LoadConfig() *Config {
 		enableTracing:    utils.GetBoolEnv(enableTracingEnvVar, enableTracingDefault),
 		tracingTech:      tracingTech,
 		enableKubeProbes: utils.GetBoolEnv(enableKubeProbesEnvVar, enableKubeProbesDefault),
+		shutdownTimeout:  utils.GetIntEnv(shutdownTimeoutEnvVar, shutdownTimeoutDefault),
 	}
 }

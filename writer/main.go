@@ -20,9 +20,6 @@ import (
 
 const (
 	serviceName = "timescaledb-writer"
-
-	zipkinHost = "localhost"
-	zipkinPort = 9411
 )
 
 var (
@@ -67,7 +64,7 @@ func main() {
 
 	startSysCallChannel()
 
-	shutdownAndWait(1)
+	shutdownAndWait(cfg.GetShutdownTimeout())
 }
 
 func initLogging() {
@@ -106,7 +103,8 @@ func initJaegerTracer() io.Closer {
 
 func initZipkinTracer() reporter.Reporter {
 	logging.Log.Debug("Init Zipkin tracer")
-	zReporter, err := tracing.InitTestingZipkin(serviceName, zipkinHost, zipkinPort)
+	tracing.LoadZipkinConfig()
+	zReporter, err := tracing.InitTestingZipkin(serviceName)
 	if err != nil {
 		logging.SugaredLog.Errorf("Zipkin tracer setup failed: %s", err.Error())
 		os.Exit(501)
